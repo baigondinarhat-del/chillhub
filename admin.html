@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChillHub Reception Astana — Терминал Ресепшна</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- HTML5 QR Code Scanner -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    #qr-reader video { border-radius: 1rem; object-fit: cover; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen antialiased border-box">
+
+<div class="min-h-screen max-w-xl mx-auto bg-slate-50 shadow-2xl p-4 space-y-4">
+
+  <!-- HEADER WITH LOGO & SHIFT CLOSE -->
+  <div class="bg-white p-4 rounded-3xl border shadow-sm space-y-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-sky-600 to-amber-500 flex items-center justify-center text-white shadow font-black text-xl">
+          ♨️
+        </div>
+        <div>
+          <h1 class="font-black text-lg text-sky-950 leading-tight">Chill<span class="text-amber-500">Hub</span> Reception</h1>
+          <p class="text-[10px] font-bold text-sky-700 uppercase tracking-wider">БАННЫЕ КОМПЛЕКСЫ АСТАНЫ • ТЕРМИНАЛ</p>
+        </div>
+      </div>
+      <button onclick="openShiftModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all">
+        <i data-lucide="log-out" class="w-3.5 h-3.5 text-slate-500"></i> Смена
+      </button>
+    </div>
+
+    <!-- NAVIGATION TABS -->
+    <div class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-2xl">
+      <button id="tabBtnTerminal" onclick="switchTab('terminal')" class="py-2 rounded-xl text-xs font-bold bg-white text-sky-950 shadow-sm transition-all flex items-center justify-center gap-1.5">
+        <i data-lucide="scan-line" class="w-3.5 h-3.5 text-sky-600"></i> Терминал
+      </button>
+      <button id="tabBtnFinance" onclick="switchTab('finance')" class="py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center gap-1.5">
+        <i data-lucide="wallet" class="w-3.5 h-3.5 text-amber-500"></i> Финансы и биллинг
+      </button>
+    </div>
+  </div>
+
+  <!-- BANYA SELECT & CAPACITY PROGRESS BAR -->
+  <div class="bg-white p-4 rounded-3xl border shadow-sm space-y-3">
+    <div>
+      <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Выбрать комплекс в Астане:</label>
+      <select id="adminBanyaSelect" onchange="updateDashboard()" class="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold text-slate-800">
+        <!-- Заполняется динамически -->
+      </select>
+    </div>
+
+    <!-- Capacity status with dynamic progress bar -->
+    <div id="occupancyCard" class="bg-slate-50 border p-3.5 rounded-2xl space-y-2">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-slate-600 uppercase block">Загруженность комплекса</span>
+          <span id="capacityText" class="text-base font-extrabold text-slate-900">0 / 30 человек</span>
+        </div>
+        <div id="capacityBadge" class="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
+          Свободно
+        </div>
+      </div>
+      <!-- Progress Bar -->
+      <div class="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+        <div id="capacityBar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 1: TERMINAL ==================== -->
+  <div id="viewTerminal" class="space-y-4">
+    <div class="bg-white p-4 rounded-3xl border shadow-sm space-y-3">
+      <h3 class="font-bold text-xs text-slate-600 uppercase">Проверка клиентов:</h3>
+
+      <!-- CAMERA QR SCANNER CONTAINER -->
+      <div id="cameraWrapper" class="hidden space-y-2 bg-slate-900 p-3 rounded-2xl">
+        <div id="qr-reader" class="w-full overflow-hidden rounded-xl"></div>
+        <button onclick="stopCameraScanner()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1.5">
+          <i data-lucide="camera-off" class="w-3.5 h-3.5"></i> Закрыть камеру
+        </button>
+      </div>
+
+      <button id="startCamBtn" onclick="startCameraScanner()" class="w-full bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-700 hover:to-sky-800 text-white font-bold text-xs py-3.5 rounded-xl shadow-lg flex justify-center items-center gap-2 transition-all">
+        <i data-lucide="camera" class="w-4 h-4 text-amber-300"></i> Сканировать QR камерой
+      </button>
+
+      <!-- BACKUP MANUAL CODE INPUT -->
+      <div class="flex gap-2">
+        <input type="text" id="manualCodeInput" placeholder="Код с экрана (например, CH-8492)" class="w-full bg-slate-50 border rounded-xl px-3 py-2 text-xs font-semibold uppercase">
+        <button onclick="processCodeInput()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2 rounded-xl shadow whitespace-nowrap">
+          Проверить
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button onclick="checkLatestClientQr()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs py-2.5 rounded-xl shadow flex items-center justify-center gap-1.5">
+          <i data-lucide="cloud-download" class="w-3.5 h-3.5 text-amber-400"></i> Из облака
+        </button>
+        <button onclick="openRejectModal()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 rounded-xl shadow">Отказать в доступе</button>
+      </div>
+    </div>
+
+    <!-- JOURNAL & INVENTORY LOG WITH TABS & SEARCH -->
+    <div class="bg-white p-4 rounded-3xl border shadow-sm space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="font-bold text-xs text-slate-600 uppercase">Журнал посещений:</h4>
+        <div class="flex bg-slate-100 p-1 rounded-xl text-[11px] font-bold">
+          <button id="filterActiveBtn" onclick="setVisitFilter('active')" class="px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm">Внутри</button>
+          <button id="filterAllBtn" onclick="setVisitFilter('all')" class="px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800">Все за день</button>
+        </div>
+      </div>
+
+      <!-- SEARCH BAR -->
+      <div class="relative">
+        <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3"></i>
+        <input type="text" id="visitSearchInput" oninput="renderDashboardVisits()" placeholder="Поиск по имени гостя или шкафчику..." class="w-full bg-slate-50 border rounded-xl pl-9 pr-3 py-2 text-xs font-medium">
+      </div>
+
+      <div id="adminLogList" class="space-y-2 text-xs max-h-96 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- ==================== TAB 2: FINANCE & BILLING ==================== -->
+  <div id="viewFinance" class="hidden space-y-4">
+    <div class="bg-white p-4 rounded-3xl border shadow-sm space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-xs text-slate-600 uppercase">Взаиморасчеты с комплексом</h3>
+          <p class="text-[11px] text-slate-400">Авторасчет выплат от ChillHub Astana</p>
+        </div>
+        <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2.5 py-1 rounded-full">
+          Сверка онлайн
+        </span>
+      </div>
+
+      <!-- KPI CARDS -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <div class="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl">
+          <span class="text-[10px] font-bold text-amber-800 uppercase block">К выплате за сегодня</span>
+          <span id="finTodayAmount" class="text-xl font-black text-amber-950 block mt-0.5">0 ₸</span>
+          <span id="finTodayCount" class="text-[11px] font-semibold text-amber-700">0 визитов</span>
+        </div>
+        <div class="bg-sky-50 border border-sky-200 p-3.5 rounded-2xl">
+          <span class="text-[10px] font-bold text-sky-800 uppercase block">К выплате за месяц</span>
+          <span id="finMonthAmount" class="text-xl font-black text-sky-950 block mt-0.5">0 ₸</span>
+          <span id="finMonthCount" class="text-[11px] font-semibold text-sky-700">0 визитов</span>
+        </div>
+      </div>
+
+      <!-- TARIFF RATES INFO -->
+      <div class="bg-slate-50 border rounded-2xl p-3 text-[11px] text-slate-600 flex justify-between items-center">
+        <span>Ставки партнера: <b>Standard — 3 500 ₸</b></span>
+        <span><b>VIP / Premium — 5 000 ₸</b></span>
+      </div>
+
+      <!-- BILLING BREAKDOWN LIST -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between">
+          <h4 class="font-bold text-xs text-slate-600 uppercase">Детализация начислений (Месяц):</h4>
+          <button onclick="exportFinanceCSV()" class="text-[11px] font-bold text-sky-700 hover:underline flex items-center gap-1">
+            <i data-lucide="download" class="w-3 h-3"></i> Реестр (.CSV)
+          </button>
+        </div>
+        <div id="financeLogList" class="space-y-2 text-xs max-h-80 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- CHECK-IN, LOCKER & INVENTORY MODAL -->
+<div id="checkinModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl">
+    <div class="flex items-center space-x-3 border-b pb-3">
+      <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+        <i data-lucide="user-check" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <span class="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">QR-код ChillHub подтвержден</span>
+        <h3 id="modalClientName" class="font-extrabold text-slate-900 text-base leading-tight">Имя Клиента</h3>
+        <p id="modalClientMeta" class="text-xs text-slate-500 font-medium">Тариф • Код</p>
+      </div>
+    </div>
+
+    <!-- LOCKER & DURATION SELECTION -->
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Шкафчик / Браслет:</label>
+        <select id="modalLockerSelect" class="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold text-slate-800">
+          <option value="№ 1">Шкафчик № 1</option>
+          <option value="№ 2">Шкафчик № 2</option>
+          <option value="№ 5">Шкафчик № 5</option>
+          <option value="№ 12">Шкафчик № 12</option>
+          <option value="№ 14" selected>Шкафчик № 14</option>
+          <option value="№ 20">Шкафчик № 20</option>
+          <option value="VIP 1">VIP Шкаф № 1</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Длительность:</label>
+        <select id="modalDurationSelect" class="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-bold text-slate-800">
+          <option value="120">2 часа</option>
+          <option value="180" selected>3 часа</option>
+          <option value="300">5 часов</option>
+          <option value="999">Безлимит</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- INVENTORY CHECKBOXES -->
+    <div class="space-y-2">
+      <label class="block text-xs font-bold text-slate-600 uppercase">Учет выдачи инвентаря:</label>
+
+      <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 border rounded-xl cursor-pointer transition-all">
+        <div class="flex items-center gap-2.5">
+          <input type="checkbox" id="invTowel" checked class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
+          <span class="text-xs font-bold text-slate-800">Выдано полотенце (1 шт.)</span>
+        </div>
+      </label>
+
+      <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 border rounded-xl cursor-pointer transition-all">
+        <div class="flex items-center gap-2.5">
+          <input type="checkbox" id="invRobe" checked class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
+          <span class="text-xs font-bold text-slate-800">Выдан халат / тапочки</span>
+        </div>
+      </label>
+    </div>
+
+    <div class="flex space-x-2 pt-2">
+      <button onclick="closeCheckinModal()" class="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs py-3 rounded-xl">Отмена</button>
+      <button onclick="confirmCheckinWithInventory()" class="w-2/3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl shadow-lg">
+        Подтвердить заезд
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SHIFT CLOSE / SUMMARY MODAL -->
+<div id="shiftModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl">
+    <div class="flex items-center space-x-3 border-b pb-3">
+      <div class="w-10 h-10 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center">
+        <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="font-extrabold text-slate-900 text-base leading-tight">Сдача смены</h3>
+        <p class="text-xs text-slate-500 font-medium">Сводка текущего дня ChillHub Astana</p>
+      </div>
+    </div>
+
+    <div id="shiftSummaryContent" class="space-y-2 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-2xl border">
+      <!-- Динамически заполняется -->
+    </div>
+
+    <div>
+      <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Имя администратора:</label>
+      <input type="text" id="shiftAdminName" placeholder="например, Камила (Утренняя)" class="w-full bg-slate-50 border rounded-xl p-2.5 text-xs font-semibold">
+    </div>
+
+    <div class="flex space-x-2 pt-1">
+      <button onclick="closeShiftModal()" class="w-1/2 bg-slate-100 text-slate-700 font-bold text-xs py-2.5 rounded-xl">Отмена</button>
+      <button onclick="confirmShiftClose()" class="w-1/2 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs py-2.5 rounded-xl shadow">Завершить смену</button>
+    </div>
+  </div>
+</div>
+
+<!-- REJECT REASON MODAL -->
+<div id="rejectModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-3xl p-5 w-full max-w-sm space-y-3">
+    <h3 class="font-bold text-slate-800 text-base">Причина отказа в доступе:</h3>
+    <select id="rejectReason" class="w-full bg-slate-50 border p-2.5 rounded-xl text-xs font-semibold">
+      <option value="Подписка заморожена">Подписка заморожена</option>
+      <option value="Лимит посещений превышен">Лимит посещений на сегодня превышен</option>
+      <option value="Недействительный QR">Недействительный QR-код</option>
+    </select>
+    <div class="flex space-x-2 pt-2">
+      <button onclick="closeRejectModal()" class="w-1/2 bg-slate-100 text-slate-700 font-bold text-xs py-2.5 rounded-xl">Отмена</button>
+      <button onclick="confirmReject()" class="w-1/2 bg-rose-600 text-white font-bold text-xs py-2.5 rounded-xl">Зафиксировать</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const astanaBanyas = [
+    "Банный Комплекс «Grand PR»",
+    "Оздоровительный комплекс «Керемет»",
+    "СПА & Сауна «Keruen Club»",
+    "Эко-Баня на дровах «Qazaq Saunas»",
+    "Rixos Anjana SPA Sauna",
+    "Городские Банные Палаты «Сарыарка»",
+    "Банный комплекс «Orda SPA»",
+    "Элитная баня «Алтай»",
+    "Оздоровительный центр «Байконур»",
+    "Культовый комплекс «Арасан Астана»",
+    "Семейные бани «Жерұйық»",
+    "Загородный клуб «Тау-Самал»",
+    "СПА-комплекс «Nomad SPA»",
+    "Городская баня №1 на Кенесары"
+  ];
+
+  const SUPABASE_URL = 'https://oczelcohhqbuzguumnlq.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_3d2kohTy1m7sRySfOZAs7A_iEZyK';
+  const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const TARIFF_PAYOUTS = {
+    'Standard Pass': 3500,
+    'Standard': 3500,
+    'VIP Pass': 5000,
+    'Premium': 5000,
+    'ChillHub Gold': 5000,
+    'ChillHub Unlimited Gold': 5000
+  };
+
+  let occupancyMap = JSON.parse(localStorage.getItem('chillhub_occupancy') || '{}');
+  let html5QrCode = null;
+  let pendingClient = null;
+  let currentTab = 'terminal';
+  let visitFilter = 'active';
+
+  function initAstanaBanyasSelect() {
+    const select = document.getElementById('adminBanyaSelect');
+    if (!select) return;
+    select.innerHTML = astanaBanyas.map(bName => `
+      <option value="${bName}">${bName}</option>
+    `).join('');
+  }
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playBeep(success = true) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (success) {
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    } else {
+      osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    initAstanaBanyasSelect();
+    lucide.createIcons();
+    updateDashboard();
+    setInterval(renderDashboardVisits, 30000);
+  });
+
+  function switchTab(tab) {
+    currentTab = tab;
+    const isTerminal = tab === 'terminal';
+
+    document.getElementById('viewTerminal').classList.toggle('hidden', !isTerminal);
+    document.getElementById('occupancyCard').classList.toggle('hidden', !isTerminal);
+    document.getElementById('viewFinance').classList.toggle('hidden', isTerminal);
+
+    document.getElementById('tabBtnTerminal').className = isTerminal
+      ? 'py-2 rounded-xl text-xs font-bold bg-white text-sky-950 shadow-sm transition-all flex items-center justify-center gap-1.5'
+      : 'py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center gap-1.5';
+
+    document.getElementById('tabBtnFinance').className = !isTerminal
+      ? 'py-2 rounded-xl text-xs font-bold bg-white text-sky-950 shadow-sm transition-all flex items-center justify-center gap-1.5'
+      : 'py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center gap-1.5';
+
+    if (!isTerminal && html5QrCode) {
+      stopCameraScanner();
+    }
+    updateDashboard();
+  }
+
+  async function updateDashboard() {
+    const banya = document.getElementById("adminBanyaSelect").value;
+    const currentCount = occupancyMap[banya] || 0;
+
+    const percent = Math.min(Math.round((currentCount / 30) * 100), 100);
+    document.getElementById("capacityText").textContent = `${currentCount} / 30 человек`;
+    document.getElementById("capacityBar").style.width = `${percent}%`;
+
+    const badge = document.getElementById("capacityBadge");
+    const bar = document.getElementById("capacityBar");
+
+    if (percent <= 60) {
+      badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800";
+      badge.textContent = "Свободно";
+      bar.className = "bg-emerald-500 h-full transition-all duration-300";
+    } else if (percent <= 85) {
+      badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800";
+      badge.textContent = "Средняя загрузка";
+      bar.className = "bg-amber-500 h-full transition-all duration-300";
+    } else {
+      badge.className = "text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-rose-100 text-rose-800";
+      badge.textContent = "Почти полон";
+      bar.className = "bg-rose-500 h-full transition-all duration-300";
+    }
+
+    const visits = await fetchBanyaVisits(banya);
+    renderVisits(visits);
+    renderFinance(visits);
+  }
+
+  function changeOccupancy(delta) {
+    const banya = document.getElementById("adminBanyaSelect").value;
+    let count = (occupancyMap[banya] || 0) + delta;
+    if (count < 0) count = 0;
+    occupancyMap[banya] = count;
+    localStorage.setItem('chillhub_occupancy', JSON.stringify(occupancyMap));
+    updateDashboard();
+  }
+
+  function startCameraScanner() {
+    const wrapper = document.getElementById('cameraWrapper');
+    const startBtn = document.getElementById('startCamBtn');
+    wrapper.classList.remove('hidden');
+    startBtn.classList.add('hidden');
+
+    html5QrCode = new Html5Qrcode("qr-reader");
+    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        stopCameraScanner();
+        playBeep(true);
+        handleScannedPayload(decodedText);
+      },
+      () => {}
+    ).catch(() => {
+      playBeep(false);
+      alert("Не удалось запустить камеру. Проверьте разрешения в браузере.");
+      stopCameraScanner();
+    });
+  }
+
+  function stopCameraScanner() {
+    const wrapper = document.getElementById('cameraWrapper');
+    const startBtn = document.getElementById('startCamBtn');
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+      }).catch(() => {});
+    }
+    wrapper.classList.add('hidden');
+    startBtn.classList.remove('hidden');
+  }
+
+  function handleScannedPayload(rawText) {
+    try {
+      const parsed = JSON.parse(rawText);
+      openCheckinModal(parsed.user_name || parsed.user || "Оразбек Т.", parsed.tariff || "ChillHub Unlimited Gold", parsed.code || rawText);
+    } catch (e) {
+      openCheckinModal("Оразбек Т.", "ChillHub Unlimited Gold", rawText.trim());
+    }
+  }
+
+  function processCodeInput() {
+    const code = document.getElementById('manualCodeInput').value.trim();
+    if (!code) {
+      playBeep(false);
+      alert("Введите цифровой или буквенный код клиента!");
+      return;
+    }
+    playBeep(true);
+    openCheckinModal("Оразбек Т. (По коду)", "ChillHub Unlimited Gold", code);
+    document.getElementById('manualCodeInput').value = '';
+  }
+
+  async function checkLatestClientQr() {
+    let user_name = null, tariff = null, code = null;
+    try {
+      const { data } = await _supabase.from('active_qrs').select('*').eq('id', 1).single();
+      if (data && data.code) {
+        user_name = data.user_name;
+        tariff = data.tariff;
+        code = data.code;
+      }
+    } catch (err) {}
+
+    if (!code) {
+      const localQr = JSON.parse(localStorage.getItem('active_chillhub_qr') || 'null');
+      if (localQr) {
+        user_name = localQr.user;
+        tariff = localQr.tariff;
+        code = localQr.code;
+      }
+    }
+
+    if (!code) {
+      code = localStorage.getItem('chillhub_client_code') || "CH-8492";
+      user_name = localStorage.getItem('chillhub_client_name') || "Оразбек Т.";
+      tariff = "ChillHub Unlimited Gold";
+    }
+
+    playBeep(true);
+    openCheckinModal(user_name, tariff, code);
+  }
+
+  function openCheckinModal(userName, tariff, code) {
+    pendingClient = { userName, tariff, code };
+    document.getElementById('modalClientName').textContent = userName;
+    document.getElementById('modalClientMeta').textContent = `${tariff} • Код: ${code}`;
+    document.getElementById('invTowel').checked = true;
+    document.getElementById('invRobe').checked = true;
+    document.getElementById('checkinModal').classList.remove('hidden');
+    lucide.createIcons();
+  }
+
+  function closeCheckinModal() {
+    document.getElementById('checkinModal').classList.add('hidden');
+    pendingClient = null;
+  }
+
+  async function confirmCheckinWithInventory() {
+    if (!pendingClient) return;
+    const { userName, tariff, code } = pendingClient;
+    const locker = document.getElementById('modalLockerSelect').value;
+    const durationMins = parseInt(document.getElementById('modalDurationSelect').value);
+    const hasTowel = document.getElementById('invTowel').checked;
+    const hasRobe = document.getElementById('invRobe').checked;
+    const banya = document.getElementById("adminBanyaSelect").value;
+    const payout = TARIFF_PAYOUTS[tariff] || 5000;
+    const visitId = 'v_' + Date.now();
+
+    const expiresAt = durationMins === 999 ? null : new Date(Date.now() + durationMins * 60000).toISOString();
+
+    const newVisit = {
+      id: visitId,
+      user_name: userName,
+      tariff: tariff,
+      banya: banya,
+      code: code,
+      payout: payout,
+      locker: locker,
+      expires_at: expiresAt,
+      inventory: { towel: hasTowel, robe: hasRobe, returned: false },
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      await _supabase.from('visits').insert([{ user_name: userName, tariff: tariff, banya: banya, code: code }]);
+    } catch(e) {}
+
+    const visits = JSON.parse(localStorage.getItem('chillhub_visits') || '[]');
+    visits.unshift(newVisit);
+    localStorage.setItem('chillhub_visits', JSON.stringify(visits));
+
+    closeCheckinModal();
+    changeOccupancy(1);
+    updateDashboard();
+  }
+
+  function checkoutGuest(visitId) {
+    const visits = JSON.parse(localStorage.getItem('chillhub_visits') || '[]');
+    const idx = visits.findIndex(v => v.id === visitId);
+    if (idx === -1) return;
+
+    const visit = visits[idx];
+    const items = [];
+    if (visit.inventory?.towel) items.push("Полотенце");
+    if (visit.inventory?.robe) items.push("Халат / тапочки");
+
+    if (items.length > 0) {
+      const ok = confirm(`Примите у гостя (${visit.user_name}, шкаф ${visit.locker}):\n• ${items.join('\n• ')}\n\nПодтвердить возврат и выход?`);
+      if (!ok) return;
+    }
+
+    visits[idx].status = 'completed';
+    if (visits[idx].inventory) visits[idx].inventory.returned = true;
+    localStorage.setItem('chillhub_visits', JSON.stringify(visits));
+
+    changeOccupancy(-1);
+    updateDashboard();
+  }
+
+  function setVisitFilter(filter) {
+    visitFilter = filter;
+    document.getElementById('filterActiveBtn').className = filter === 'active'
+      ? 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm'
+      : 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800';
+    document.getElementById('filterAllBtn').className = filter === 'all'
+      ? 'px-2.5 py-1 rounded-lg bg-white text-slate-900 shadow-sm'
+      : 'px-2.5 py-1 rounded-lg text-slate-500 hover:text-slate-800';
+    updateDashboard();
+  }
+
+  async function fetchBanyaVisits(banya) {
+    let localVisits = JSON.parse(localStorage.getItem('chillhub_visits') || '[]').filter(v => v.banya === banya);
+    return localVisits;
+  }
+
+  function renderDashboardVisits() {
+    updateDashboard();
+  }
+
+  function renderVisits(visits) {
+    const container = document.getElementById("adminLogList");
+    const searchQuery = document.getElementById("visitSearchInput").value.toLowerCase();
+
+    let filtered = visits.filter(v => {
+      if (visitFilter === 'active' && v.status !== 'active') return false;
+      if (searchQuery) {
+        const matchName = (v.user_name || '').toLowerCase().includes(searchQuery);
+        const matchLocker = (v.locker || '').toLowerCase().includes(searchQuery);
+        const matchCode = (v.code || '').toLowerCase().includes(searchQuery);
+        if (!matchName && !matchLocker && !matchCode) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p class="text-center text-slate-400 py-6">Записи не найдены</p>';
+      return;
+    }
+
+    const now = Date.now();
+
+    container.innerHTML = filtered.map(v => {
+      const isActive = v.status === 'active';
+      const inv = v.inventory || {};
+      const badges = [];
+      if (inv.towel) badges.push(`Полотенце`);
+      if (inv.robe) badges.push(`Халат`);
+
+      let timerHtml = '';
+      let isOverdue = false;
+      if (isActive && v.expires_at) {
+        const diffMs = new Date(v.expires_at).getTime() - now;
+        const diffMins = Math.round(diffMs / 60000);
+        if (diffMins <= 0) {
+          isOverdue = true;
+          timerHtml = `<span class="text-[10px] bg-rose-100 text-rose-700 border border-rose-300 px-2 py-0.5 rounded font-bold animate-pulse">⚡ Пересид +${Math.abs(diffMins)} мин</span>`;
+        } else {
+          const hours = Math.floor(diffMins / 60);
+          const mins = diffMins % 60;
+          const hoursText = hours > 0 ? `${hours}ч ` : '';
+          timerHtml = `<span class="text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded font-semibold">⏳ Осталось: ${hoursText}${mins}м</span>`;
+        }
+      }
+
+      let invHtml = '';
+      if (badges.length > 0) {
+        invHtml = inv.returned
+          ? `<span class="inline-block mt-1 text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-md font-semibold">✓ Возвращено: ${badges.join(', ')}</span>`
+          : `<span class="inline-block mt-1 text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-md font-bold">На руках: ${badges.join(', ')}</span>`;
+      }
+
+      return `
+        <div class="bg-slate-50 border ${isOverdue ? 'border-rose-300 bg-rose-50/20' : isActive ? 'border-sky-200 bg-sky-50/20' : 'border-slate-200'} rounded-xl p-2.5 flex items-center justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="font-extrabold text-sky-900 bg-sky-100 px-2 py-0.5 rounded text-[11px]">${v.locker || 'Шкаф'}</span>
+              <p class="font-bold text-slate-800">${v.user_name}</p>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-0.5">${v.tariff} • ${v.code}</p>
+            <div class="flex flex-wrap items-center gap-1.5 mt-1">
+              ${timerHtml}
+              ${invHtml}
+            </div>
+          </div>
+          <div class="flex flex-col items-end gap-1.5">
+            <span class="font-mono text-[10px] text-slate-400">${new Date(v.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+            ${isActive && v.id ? `
+              <button onclick="checkoutGuest('${v.id}')" class="bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 font-bold text-[10px] px-2.5 py-1 rounded-lg shadow-sm transition-all">
+                Выход
+              </button>
+            ` : '<span class="text-[10px] text-slate-400 font-medium">Завершен</span>'}
+          </div>
+        </div>
+      `;
+    }).join('');
+    lucide.createIcons();
+  }
+
+  async function openShiftModal() {
+    const banya = document.getElementById("adminBanyaSelect").value;
+    const visits = await fetchBanyaVisits(banya);
+
+    let totalToday = 0;
+    let towelsOut = 0;
+    let robesOut = 0;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    visits.forEach(v => {
+      if ((v.created_at || '').slice(0, 10) === todayStr) {
+        totalToday++;
+        if (v.status === 'active') {
+          if (v.inventory?.towel) towelsOut++;
+          if (v.inventory?.robe) robesOut++;
+        }
+      }
+    });
+
+    document.getElementById('shiftSummaryContent').innerHTML = `
+      <p><b>Комплекс:</b> ${banya}</p>
+      <p><b>Всего гостей за смену:</b> ${totalToday}</p>
+      <p><b>Не сдано полотенец:</b> <span class="text-amber-700 font-bold">${towelsOut} шт.</span></p>
+      <p><b>Не сдано халатов:</b> <span class="text-amber-700 font-bold">${robesOut} шт.</span></p>
+    `;
+    document.getElementById('shiftModal').classList.remove('hidden');
+  }
+
+  function closeShiftModal() { document.getElementById('shiftModal').classList.add('hidden'); }
+
+  function confirmShiftClose() {
+    const admin = document.getElementById('shiftAdminName').value.trim();
+    if (!admin) {
+      alert("Введите имя администратора для закрытия смены!");
+      return;
+    }
+    alert(`Смена ChillHub Astana успешно сдана. Администратор: ${admin}\nДанные зафиксированы.`);
+    closeShiftModal();
+    document.getElementById('shiftAdminName').value = '';
+  }
+
+  function renderFinance(visits) {
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10);
+    const monthStr = now.toISOString().slice(0, 7);
+
+    let todaySum = 0, todayCount = 0;
+    let monthSum = 0, monthCount = 0;
+    const monthVisits = [];
+
+    visits.forEach(v => {
+      const dateStr = (v.created_at || '').slice(0, 10);
+      const payout = v.payout || TARIFF_PAYOUTS[v.tariff] || 5000;
+
+      if (dateStr === todayStr) {
+        todaySum += payout;
+        todayCount++;
+      }
+      if (dateStr.startsWith(monthStr)) {
+        monthSum += payout;
+        monthCount++;
+        monthVisits.push({ ...v, payout });
+      }
+    });
+
+    document.getElementById('finTodayAmount').textContent = `${todaySum.toLocaleString('ru-RU')} ₸`;
+    document.getElementById('finTodayCount').textContent = `${todayCount} визитов`;
+    document.getElementById('finMonthAmount').textContent = `${monthSum.toLocaleString('ru-RU')} ₸`;
+    document.getElementById('finMonthCount').textContent = `${monthCount} визитов`;
+
+    const listEl = document.getElementById('financeLogList');
+    if (monthVisits.length === 0) {
+      listEl.innerHTML = '<p class="text-center text-slate-400 py-4">Нет начислений за текущий месяц</p>';
+      return;
+    }
+
+    listEl.innerHTML = monthVisits.map(v => `
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between">
+        <div>
+          <p class="font-bold text-slate-800">${v.user_name} <span class="text-[10px] text-sky-700 font-normal">(${v.locker || 'Шкаф'})</span></p>
+          <p class="text-[10px] text-slate-500">${new Date(v.created_at).toLocaleDateString('ru-RU')} • ${v.tariff}</p>
+        </div>
+        <span class="font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+          +${v.payout.toLocaleString('ru-RU')} ₸
+        </span>
+      </div>
+    `).join('');
+  }
+
+  async function exportFinanceCSV() {
+    const banya = document.getElementById("adminBanyaSelect").value;
+    const visits = await fetchBanyaVisits(banya);
+    if (!visits.length) return alert("Нет данных для выгрузки");
+
+    let csv = "\uFEFFДата;Время;Комплекс Астаны;Шкаф;Клиент;Тариф;Код;Сумма выплаты ChillHub (KZT)\n";
+    visits.forEach(v => {
+      const d = new Date(v.created_at);
+      const payout = v.payout || TARIFF_PAYOUTS[v.tariff] || 5000;
+      csv += `${d.toLocaleDateString('ru-RU')};${d.toLocaleTimeString('ru-RU')};${banya};${v.locker || '-'};${v.user_name};${v.tariff};${v.code};${payout}\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `ChillHub_Astana_Billing_${banya.replace(/[^a-zA-Zа-яА-Я0-9]/g, '_')}.csv`;
+    link.click();
+  }
+
+  function openRejectModal() { document.getElementById('rejectModal').classList.remove('hidden'); }
+  function closeRejectModal() { document.getElementById('rejectModal').classList.add('hidden'); }
+
+  function confirmReject() {
+    playBeep(false);
+    const reason = document.getElementById('rejectReason').value;
+    alert(`В доступе ChillHub отказано. Причина: ${reason}`);
+    closeRejectModal();
+  }
+</script>
+</body>
+</html>
